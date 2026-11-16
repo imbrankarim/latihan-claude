@@ -4,12 +4,14 @@ import App from './App.vue';
 import './style.css';
 import DataPegawai from './views/DataPegawai.vue';
 import KenaikanPangkat from './views/KenaikanPangkat.vue';
+import Login from './views/Login.vue';
 import KenaikanGaji from './views/KenaikanGaji.vue';
 
 const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/', redirect: '/pegawai' },
+    { path: '/login', component: Login, meta: { title: 'Login Admin' } },
     { path: '/pegawai', component: DataPegawai, meta: { title: 'Data Pegawai' } },
     { path: '/kenaikan-pangkat', component: KenaikanPangkat, meta: { title: 'Kenaikan Pangkat Selanjutnya' } },
     { path: '/kenaikan-gaji-berkala', component: KenaikanGaji, meta: { title: 'Kenaikan Gaji Berkala' } },

@@ -30,6 +30,12 @@ export function openDb(file = DB_PATH) {
       unit TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_pegawai_unit ON pegawai(unit);
+    CREATE TABLE IF NOT EXISTS admin (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
   `);
   return db;
 }

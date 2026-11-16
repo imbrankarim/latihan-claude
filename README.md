@@ -18,3 +18,13 @@ Produksi: `npm run build && npm start` (Express menyajikan `frontend/dist`).
 
 ## Database
 SQLite via `node:sqlite` (file `backend/data/kepegawaian.db`). Skema di `backend/src/db.js`. Untuk produksi multi-user, migrasi ke PostgreSQL cukup mengganti `db.js` dan query di `app.js`.
+
+## Login admin
+- Hanya admin yang bisa menambah, mengedit, dan menghapus pegawai (halaman Data Pegawai, menu **Login Admin**). Halaman lain tetap publik.
+- Akun pertama dibuat otomatis saat server pertama jalan. Atur lewat environment variable:
+  ```powershell
+  $env:ADMIN_USERNAME="admin"; $env:ADMIN_PASSWORD="password-kuat-anda"; npm run dev:api
+  ```
+  Jika `ADMIN_PASSWORD` tidak diisi, password acak dicetak **sekali** di terminal. Jika terlewat, hapus `backend/data/kepegawaian.db` lalu jalankan ulang (data di-seed ulang dari Excel — perubahan data akan hilang).
+- Password disimpan sebagai hash scrypt; sesi memakai JWT (8 jam). Secret dibuat otomatis, atau set `JWT_SECRET`.
+- Login dibatasi 10 percobaan per 15 menit per IP. **Gunakan HTTPS saat dipublikasikan.**

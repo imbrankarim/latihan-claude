@@ -1,5 +1,7 @@
 import express from 'express';
 import cors from 'cors';
+import { requireAdmin, loginLimiter, verifyPassword, signToken, getSecret } from './auth.js';
+import { validatePegawai } from './validate.js';
 import { addYears, todayISO, statusJatuhTempo, monthsBetween } from './dates.js';
 
 const URUT = { terlambat: 0, segera: 1, tahun_ini: 2, belum: 3 };
@@ -21,9 +23,24 @@ function ringkasan(items) {
   return r;
 }
 
-export function createApp(db, { now = () => new Date() } = {}) {
+export function createApp(db, { now = () => new Date(), jwtSecret = getSecret(db), loginMax = 10 } = {}) {
   const app = express();
   app.use(cors());
+  app.use(express.json({ limit: '100kb' }));
+  const admin = requireAdmin(jwtSecret);
+
+  app.post('/api/auth/login', loginLimiter({ max: loginMax }), (req, res) => {
+    const { username, password } = req.body || {};
+    const row = typeof username === 'string' && typeof password === 'string'
+      ? db.prepare('SELECT * FROM admin WHERE username = ?').get(username) : null;
+    if (!row || !verifyPassword(password, row.password_hash)) {
+      return res.status(401).json({ error: 'Username atau password salah' });
+    }
+    req.clearLoginHits?.();
+    res.json({ token: signToken(jwtSecret, row), username: row.username });
+  });
+
+  app.get('/api/auth/me', admin, (req, res) => res.json({ username: req.admin.username }));
 
   app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
@@ -36,6 +53,35 @@ export function createApp(db, { now = () => new Date() } = {}) {
     const sql = `SELECT * FROM pegawai ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY id`;
     const rows = db.prepare(sql).all(args).map(r => ({ ...r, reguler: !!r.reguler }));
     res.json({ data: rows, total: rows.length });
+  });
+
+  const save = (id) => (req, res) => {
+    const { value, errors } = validatePegawai(req.body);
+    if (Object.keys(errors).length) return res.status(400).json({ error: 'Data tidak valid', errors });
+    try {
+      if (id(req) === null) {
+        const cols = Object.keys(value);
+        const r = db.prepare(`INSERT INTO pegawai (${cols.join(',')}) VALUES (${cols.map(c => '@' + c).join(',')})`).run(value);
+        return res.status(201).json(getOne(r.lastInsertRowid));
+      }
+      const cols = Object.keys(value).map(c => `${c} = @${c}`).join(', ');
+      const r = db.prepare(`UPDATE pegawai SET ${cols} WHERE id = @id`).run({ ...value, id: id(req) });
+      if (!r.changes) return res.status(404).json({ error: 'Pegawai tidak ditemukan' });
+      res.json(getOne(id(req)));
+    } catch (e) {
+      if (String(e.message).includes('UNIQUE')) return res.status(409).json({ error: 'Data tidak valid', errors: { nip: 'NIP sudah terdaftar' } });
+      throw e;
+    }
+  };
+  const getOne = (id) => { const r = db.prepare('SELECT * FROM pegawai WHERE id = ?').get(id); return { ...r, reguler: !!r.reguler }; };
+  const paramId = req => (/^\d+$/.test(req.params.id) ? Number(req.params.id) : -1);
+
+  app.post('/api/pegawai', admin, save(() => null));
+  app.put('/api/pegawai/:id', admin, save(paramId));
+  app.delete('/api/pegawai/:id', admin, (req, res) => {
+    const r = db.prepare('DELETE FROM pegawai WHERE id = ?').run(paramId(req));
+    if (!r.changes) return res.status(404).json({ error: 'Pegawai tidak ditemukan' });
+    res.status(204).end();
   });
 
   app.get('/api/unit', (_req, res) => {

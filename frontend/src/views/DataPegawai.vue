@@ -1,8 +1,10 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue';
-import { api, tgl, bulanTahun } from '../api.js';
+import { api, auth, tgl, bulanTahun } from '../api.js';
+import PegawaiForm from '../components/PegawaiForm.vue';
 
 const data = ref([]), units = ref([]), loading = ref(true), error = ref('');
+const form = ref(null); // null = tertutup, {} = tambah, pegawai = edit
 const q = ref(''), unit = ref(''), status = ref(''), detail = ref(null);
 
 async function load() {
@@ -15,6 +17,12 @@ async function load() {
     data.value = (await api(`/pegawai?${p}`)).data; error.value = '';
   } catch (e) { error.value = e.message; } finally { loading.value = false; }
 }
+async function hapus(d) {
+  if (!confirm(`Hapus data ${d.nama} (${d.nip})? Tindakan ini tidak dapat dibatalkan.`)) return;
+  try { await api(`/pegawai/${d.id}`, { method: 'DELETE' }); detail.value = null; await load(); }
+  catch (e) { error.value = e.message; }
+}
+async function saved() { form.value = null; units.value = await api('/unit'); await load(); }
 let t;
 watch(q, () => { clearTimeout(t); t = setTimeout(load, 250); });
 watch([unit, status], load);
@@ -30,7 +38,7 @@ const fields = computed(() => !detail.value ? [] : [
 </script>
 
 <template>
-  <h1>Data Pegawai</h1>
+  <div class="head"><h1>Data Pegawai</h1><button v-if="auth.token" class="btn primary" @click="form = {}">+ Tambah Pegawai</button></div>
   <div class="filters">
     <input v-model="q" type="search" placeholder="Cari nama, NIP, atau jabatan…" />
     <select v-model="unit"><option value="">Semua unit</option><option v-for="u in units" :key="u">{{ u }}</option></select>
@@ -47,12 +55,17 @@ const fields = computed(() => !detail.value ? [] : [
           <td><strong>{{ d.nama }}</strong><small>{{ d.nip }}</small></td>
           <td>{{ d.pangkat || d.status_kepegawaian }}<small>{{ d.golongan }}</small></td>
           <td>{{ d.jabatan }}</td><td>{{ d.unit }}</td><td>{{ bulanTahun(d.tmt_pangkat) }}</td>
-          <td><button class="link" @click="detail = d">Detail</button></td>
+          <td class="aksi">
+            <button class="link" @click="detail = d">Detail</button>
+            <template v-if="auth.token"><button class="link" @click="form = d">Edit</button><button class="link danger" @click="hapus(d)">Hapus</button></template>
+          </td>
         </tr>
         <tr v-if="!loading && !data.length"><td colspan="7" class="empty">Tidak ada data.</td></tr>
       </tbody>
     </table>
   </div>
+
+  <PegawaiForm v-if="form" :pegawai="form.id ? form : null" :units="units" @saved="saved" @close="form = null" />
 
   <div v-if="detail" class="overlay" @click.self="detail = null">
     <div class="modal" role="dialog" aria-modal="true">

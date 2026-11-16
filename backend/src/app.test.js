@@ -34,3 +34,54 @@ test('util tanggal', () => {
   assert.equal(addYears('2024-12-01', 2), '2026-12-01');
   assert.equal(statusJatuhTempo('2026-11-16', '2026-11-16'), 'terlambat');
 });
+
+// ---- Auth & CRUD ----
+import { hashPassword } from './auth.js';
+function setupAuth() {
+  const db = openDb(':memory:');
+  db.prepare('INSERT INTO admin (username, password_hash) VALUES (?, ?)').run('admin', hashPassword('rahasia123'));
+  return createApp(db, { jwtSecret: 's', loginMax: 3 });
+}
+async function call(app, method, url, body, token) {
+  const s = app.listen(0);
+  try {
+    const res = await fetch(`http://localhost:${s.address().port}${url}`, {
+      method, headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) },
+      body: body ? JSON.stringify(body) : undefined });
+    return { status: res.status, body: res.status === 204 ? null : await res.json() };
+  } finally { s.close(); }
+}
+const pegawai = { nip: '198001012005011001', nama: 'Budi', status_kepegawaian: 'PNS', pangkat: 'Penata', tmt_pangkat: '2024-04-01',
+  golongan: 'III/c', tmt_gaji_terakhir: '2025-03-01', reguler: true, unit: 'U' };
+
+test('login & proteksi endpoint tulis', async () => {
+  const app = setupAuth();
+  assert.equal((await call(app, 'POST', '/api/pegawai', pegawai)).status, 401);
+  assert.equal((await call(app, 'POST', '/api/auth/login', { username: 'admin', password: 'salah' })).status, 401);
+  const { body } = await call(app, 'POST', '/api/auth/login', { username: 'admin', password: 'rahasia123' });
+  assert.ok(body.token);
+  assert.equal((await call(app, 'GET', '/api/auth/me', null, body.token)).body.username, 'admin');
+});
+
+test('tambah, edit, hapus + validasi', async () => {
+  const app = setupAuth();
+  const { body: { token } } = await call(app, 'POST', '/api/auth/login', { username: 'admin', password: 'rahasia123' });
+  const bad = await call(app, 'POST', '/api/pegawai', { ...pegawai, nip: '123' }, token);
+  assert.equal(bad.status, 400); assert.ok(bad.body.errors.nip);
+  const ok = await call(app, 'POST', '/api/pegawai', pegawai, token);
+  assert.equal(ok.status, 201);
+  assert.equal((await call(app, 'POST', '/api/pegawai', pegawai, token)).status, 409);
+  const upd = await call(app, 'PUT', `/api/pegawai/${ok.body.id}`, { ...pegawai, nama: 'Budi S' }, token);
+  assert.equal(upd.body.nama, 'Budi S');
+  // PPPK: pangkat dikosongkan, keluar dari kenaikan pangkat
+  const pppk = await call(app, 'PUT', `/api/pegawai/${ok.body.id}`, { ...pegawai, status_kepegawaian: 'PPPK' }, token);
+  assert.equal(pppk.body.pangkat, null); assert.equal(pppk.body.reguler, false);
+  assert.equal((await call(app, 'DELETE', `/api/pegawai/${ok.body.id}`, null, token)).status, 204);
+  assert.equal((await call(app, 'DELETE', `/api/pegawai/${ok.body.id}`, null, token)).status, 404);
+});
+
+test('login dibatasi setelah terlalu banyak percobaan', async () => {
+  const app = setupAuth(); let last;
+  for (let i = 0; i < 4; i++) last = await call(app, 'POST', '/api/auth/login', { username: 'admin', password: 'x' });
+  assert.equal(last.status, 429);
+});
