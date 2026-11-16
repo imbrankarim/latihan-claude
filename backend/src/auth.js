@@ -35,15 +35,21 @@ export function ensureAdmin(db, env = process.env) {
   return { username, password, generated };
 }
 
+// 'v' = sidik jari hash password: token lama otomatis tidak berlaku setelah password diganti.
+const fingerprint = hash => crypto.createHash('sha256').update(hash).digest('hex').slice(0, 16);
+
 export function signToken(secret, admin) {
-  return jwt.sign({ sub: admin.id, username: admin.username }, secret, { expiresIn: '8h' });
+  return jwt.sign({ sub: admin.id, username: admin.username, v: fingerprint(admin.password_hash) }, secret, { expiresIn: '8h' });
 }
 
-export function requireAdmin(secret) {
+export function requireAdmin(secret, db) {
   return (req, res, next) => {
     const m = /^Bearer (.+)$/.exec(req.get('authorization') || '');
     try {
-      req.admin = jwt.verify(m?.[1] ?? '', secret);
+      const claims = jwt.verify(m?.[1] ?? '', secret);
+      const row = db.prepare('SELECT * FROM admin WHERE id = ?').get(claims.sub);
+      if (!row || fingerprint(row.password_hash) !== claims.v) throw new Error('stale');
+      req.admin = { id: row.id, username: row.username };
       next();
     } catch {
       res.status(401).json({ error: 'Silakan login sebagai admin' });

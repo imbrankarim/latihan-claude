@@ -20,7 +20,7 @@ const nav = [
       <nav>
         <router-link v-for="n in nav" :key="n.to" :to="n.to">{{ n.label }}</router-link>
         <span class="sep"></span>
-        <template v-if="auth.token"><span class="who">{{ auth.username }}</span><button class="btn small" @click="logout">Keluar</button></template>
+        <template v-if="auth.token"><router-link to="/akun" class="who" title="Ganti password">{{ auth.username }} · Ganti Password</router-link><button class="btn small" @click="logout">Keluar</button></template>
         <router-link v-else to="/login">Login Admin</router-link>
       </nav>
     </div>

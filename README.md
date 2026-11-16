@@ -27,4 +27,5 @@ SQLite via `node:sqlite` (file `backend/data/kepegawaian.db`). Skema di `backend
   ```
   Jika `ADMIN_PASSWORD` tidak diisi, password acak dicetak **sekali** di terminal. Jika terlewat, hapus `backend/data/kepegawaian.db` lalu jalankan ulang (data di-seed ulang dari Excel — perubahan data akan hilang).
 - Password disimpan sebagai hash scrypt; sesi memakai JWT (8 jam). Secret dibuat otomatis, atau set `JWT_SECRET`.
+- Ganti password lewat menu nama admin (kanan atas) → **Ganti Password** (minimal 8 karakter). Sesi di perangkat lain otomatis keluar.
 - Login dibatasi 10 percobaan per 15 menit per IP. **Gunakan HTTPS saat dipublikasikan.**

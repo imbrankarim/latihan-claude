@@ -85,3 +85,19 @@ test('login dibatasi setelah terlalu banyak percobaan', async () => {
   for (let i = 0; i < 4; i++) last = await call(app, 'POST', '/api/auth/login', { username: 'admin', password: 'x' });
   assert.equal(last.status, 429);
 });
+
+test('ganti password: validasi, token lama tidak berlaku, login dengan password baru', async () => {
+  const app = setupAuth();
+  const { body: { token } } = await call(app, 'POST', '/api/auth/login', { username: 'admin', password: 'rahasia123' });
+  const salah = await call(app, 'POST', '/api/auth/password', { current_password: 'x', new_password: 'baru12345' }, token);
+  assert.equal(salah.status, 400); assert.ok(salah.body.errors.current_password);
+  const pendek = await call(app, 'POST', '/api/auth/password', { current_password: 'rahasia123', new_password: 'abc' }, token);
+  assert.ok(pendek.body.errors.new_password);
+  assert.equal((await call(app, 'POST', '/api/auth/password', { current_password: 'rahasia123', new_password: 'baru12345' })).status, 401);
+  const ok = await call(app, 'POST', '/api/auth/password', { current_password: 'rahasia123', new_password: 'baru12345' }, token);
+  assert.equal(ok.status, 200);
+  assert.equal((await call(app, 'GET', '/api/auth/me', null, token)).status, 401);          // token lama
+  assert.equal((await call(app, 'GET', '/api/auth/me', null, ok.body.token)).status, 200);  // token baru
+  assert.equal((await call(app, 'POST', '/api/auth/login', { username: 'admin', password: 'rahasia123' })).status, 401);
+  assert.equal((await call(app, 'POST', '/api/auth/login', { username: 'admin', password: 'baru12345' })).status, 200);
+});

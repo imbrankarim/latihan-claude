@@ -1,6 +1,6 @@
 import express from 'express';
 import cors from 'cors';
-import { requireAdmin, loginLimiter, verifyPassword, signToken, getSecret } from './auth.js';
+import { requireAdmin, loginLimiter, verifyPassword, hashPassword, signToken, getSecret } from './auth.js';
 import { validatePegawai } from './validate.js';
 import { addYears, todayISO, statusJatuhTempo, monthsBetween } from './dates.js';
 
@@ -27,7 +27,7 @@ export function createApp(db, { now = () => new Date(), jwtSecret = getSecret(db
   const app = express();
   app.use(cors());
   app.use(express.json({ limit: '100kb' }));
-  const admin = requireAdmin(jwtSecret);
+  const admin = requireAdmin(jwtSecret, db);
 
   app.post('/api/auth/login', loginLimiter({ max: loginMax }), (req, res) => {
     const { username, password } = req.body || {};
@@ -38,6 +38,24 @@ export function createApp(db, { now = () => new Date(), jwtSecret = getSecret(db
     }
     req.clearLoginHits?.();
     res.json({ token: signToken(jwtSecret, row), username: row.username });
+  });
+
+  app.post('/api/auth/password', admin, loginLimiter({ max: loginMax }), (req, res) => {
+    const { current_password: cur, new_password: next } = req.body || {};
+    const row = db.prepare('SELECT * FROM admin WHERE id = ?').get(req.admin.id);
+    if (typeof cur !== 'string' || !verifyPassword(cur, row.password_hash)) {
+      return res.status(400).json({ error: 'Data tidak valid', errors: { current_password: 'Password saat ini salah' } });
+    }
+    if (typeof next !== 'string' || next.length < 8) {
+      return res.status(400).json({ error: 'Data tidak valid', errors: { new_password: 'Password baru minimal 8 karakter' } });
+    }
+    if (next === cur) {
+      return res.status(400).json({ error: 'Data tidak valid', errors: { new_password: 'Password baru harus berbeda' } });
+    }
+    const hash = hashPassword(next);
+    db.prepare('UPDATE admin SET password_hash = ? WHERE id = ?').run(hash, row.id);
+    // token baru agar sesi ini tetap aktif; token lain (perangkat lain) menjadi tidak berlaku
+    res.json({ token: signToken(jwtSecret, { ...row, password_hash: hash }), username: row.username });
   });
 
   app.get('/api/auth/me', admin, (req, res) => res.json({ username: req.admin.username }));
