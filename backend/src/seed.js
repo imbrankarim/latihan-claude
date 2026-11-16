@@ -8,8 +8,10 @@ const data = JSON.parse(fs.readFileSync(path.join(dir, '..', 'data', 'pegawai.js
 const db = openDb();
 const cols = ['nip','nama','tempat_lahir','tanggal_lahir','jenis_kelamin','agama','status_kawin','status_kepegawaian','pangkat','tmt_pangkat','golongan','jabatan','tmt_cpns','tmt_gaji_terakhir','reguler','unit_kerja','unit'];
 const ins = db.prepare(`INSERT INTO pegawai (${cols.join(',')}) VALUES (${cols.map(c => '@' + c).join(',')})`);
-db.transaction(() => {
+db.exec('BEGIN');
+try {
   db.prepare('DELETE FROM pegawai').run();
   for (const p of data) ins.run({ ...p, reguler: p.reguler ? 1 : 0 });
-})();
+  db.exec('COMMIT');
+} catch (e) { db.exec('ROLLBACK'); throw e; }
 console.log(`Seed selesai: ${data.length} pegawai`);

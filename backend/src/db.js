@@ -1,4 +1,4 @@
-import Database from 'better-sqlite3';
+import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -6,8 +6,8 @@ const dir = path.dirname(fileURLToPath(import.meta.url));
 export const DB_PATH = process.env.DB_PATH || path.join(dir, '..', 'data', 'kepegawaian.db');
 
 export function openDb(file = DB_PATH) {
-  const db = new Database(file);
-  db.pragma('journal_mode = WAL');
+  const db = new DatabaseSync(file);
+  db.exec('PRAGMA journal_mode = WAL');
   db.exec(`
     CREATE TABLE IF NOT EXISTS pegawai (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

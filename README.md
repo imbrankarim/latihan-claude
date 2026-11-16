@@ -1,6 +1,6 @@
 # Layanan Kepegawaian — Kemenham Wilayah Kerja Sulawesi Tenggara
 
-Vue 3 (Vite) + Express + SQLite.
+Vue 3 (Vite) + Express + SQLite (`node:sqlite` bawaan Node, perlu Node >= 22.13; tanpa kompilasi native).
 
 ## Menjalankan
 ```bash
@@ -17,4 +17,4 @@ Produksi: `npm run build && npm start` (Express menyajikan `frontend/dist`).
 - Status: *Jatuh tempo* (≤ hari ini), *< 3 bulan*, *< 1 tahun*, *Belum waktunya*. Dihitung saat request (WITA), tidak disimpan di DB.
 
 ## Database
-SQLite (file `backend/data/kepegawaian.db`). Skema di `backend/src/db.js`. Untuk produksi multi-user, migrasi ke PostgreSQL cukup mengganti `db.js` dan query di `app.js`.
+SQLite via `node:sqlite` (file `backend/data/kepegawaian.db`). Skema di `backend/src/db.js`. Untuk produksi multi-user, migrasi ke PostgreSQL cukup mengganti `db.js` dan query di `app.js`.
